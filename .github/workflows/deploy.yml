@@ -1,44 +1,48 @@
-name: Deploy React a EC2
+name: Deploy Apache EC2
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout del código
       - name: Checkout código
         uses: actions/checkout@v4
 
-      - name: Instalar Node
-        uses: actions/setup-node@v4
+      - name: Deploy a EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          node-version: 20
-          cache: npm
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "🚀 Deploy iniciado"
 
-      - name: Build de React
-        run: |
-          npm ci
-          npm run build
+            # Instalar Node, Git y Apache si no existen (Amazon Linux)
+            command -v node >/dev/null || sudo dnf install -y nodejs
+            command -v git  >/dev/null || sudo dnf install -y git
+            rpm -q httpd    >/dev/null || sudo dnf install -y httpd
 
-      # 2. Conectarse a EC2 vía SSH (usa los secrets)
-      - name: Configurar SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
-          chmod 600 ~/.ssh/ec2_key
-          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+            if [ ! -d "${{ github.event.repository.name }}" ]; then
+              git clone ${{ github.server_url }}/${{ github.repository }}.git
+            fi
 
-      - name: Copiar archivos a EC2
-        run: |
-          scp -i ~/.ssh/ec2_key -r dist deploy.sh \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/tmp/
+            cd ${{ github.event.repository.name }}
 
-      # 3. Ejecutar script en el servidor
-      - name: Ejecutar script de deploy
-        run: |
-          ssh -i ~/.ssh/ec2_key ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
-            "bash /tmp/deploy.sh"
+            git fetch origin
+            git reset --hard origin/main
+
+            # Build de React
+            npm ci
+            npm run build
+
+            sudo rm -rf /var/www/html/*
+            sudo cp -r dist/* /var/www/html/
+            sudo systemctl enable httpd
+            sudo systemctl restart httpd
+
+            echo "✅ Deploy terminado"
