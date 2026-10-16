@@ -22,7 +22,7 @@ export default function App() {
           <span className="punto" /> Sitio web en línea
         </span>
 
-        <h1 className="titulo">¡Hola Mundo! 👋</h1>
+        <h1 className="titulo">¡Hola Mund! 👋</h1>
         <p className="subtitulo">
           App React desplegada automáticamente en AWS EC2 con Apache
           mediante GitHub Actions.
